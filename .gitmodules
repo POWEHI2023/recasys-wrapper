@@ -1,0 +1,9 @@
+[submodule "recsys-examples"]
+	path = recsys-examples
+	url = https://github.com/NVIDIA/recsys-examples.git
+[submodule "Megatron-LM"]
+	path = Megatron-LM
+	url = https://github.com/NVIDIA/Megatron-LM.git
+[submodule "MindSpeed"]
+	path = MindSpeed
+	url = https://github.com/Ascend/MindSpeed.git
