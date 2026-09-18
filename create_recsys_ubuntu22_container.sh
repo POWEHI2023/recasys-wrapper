@@ -54,7 +54,7 @@ mount_args=(
     -v "/usr/local/sbin:/usr/local/sbin"
     -v "/usr/local/bin:/usr/local/bin"
 )
-for library in /usr/lib64/liburma.so* /usr/lib64/libummu.so* /usr/lib64/libnl*.so*; do
+for library in /usr/lib64/liburma*.so* /usr/lib64/libummu*.so* /usr/lib64/libnl*.so* /usr/lib64/libtpsa*.so*; do
     if [[ -f $library ]]; then
         mount_args+=(-v "$library:$library:ro")
     fi
@@ -64,6 +64,9 @@ if [[ -d /usr/lib64/urma ]]; then
 fi
 
 driver_library_path=/usr/local/Ascend/driver/lib64:/usr/local/Ascend/driver/lib64/common:/usr/local/Ascend/driver/lib64/driver:/usr/lib64
+if [[ -d /usr/lib64/urma ]]; then
+    driver_library_path+=:/usr/lib64/urma
+fi
 
 docker run -itd --net=host --privileged \
     --name "$container_name" \
