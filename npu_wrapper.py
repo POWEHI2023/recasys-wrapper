@@ -135,6 +135,7 @@ def temporary_cuda_device_strings(
     repo: Path, *, require_clean: bool = True
 ) -> Generator[None, None, None]:
     """Temporarily rewrite CUDA device string literals in repository Python files."""
+
     if not (repo / ".git").exists():
         raise RuntimeError(f"recsys-examples is not a Git worktree: {repo}")
     if require_clean and _git(repo, "status", "--porcelain"):
@@ -172,6 +173,7 @@ def temporary_cuda_device_strings(
 @contextmanager
 def rewrite_cuda(repo: Path, *, require_clean: bool = True) -> Generator[None, None, None]:
     """Install NPU aliases and temporarily rewrite CUDA device strings."""
+
     with temporary_cuda_device_strings(repo, require_clean=require_clean):
         install()
         yield
@@ -179,6 +181,7 @@ def rewrite_cuda(repo: Path, *, require_clean: bool = True) -> Generator[None, N
 
 def main(argv: list[str] | None = None) -> None:
     """Run a script or module with optional patches and CUDA-to-NPU rewrite."""
+
     args = list(sys.argv[1:] if argv is None else argv)
     if not args or args[0] in {"-h", "--help"}:
         print(
