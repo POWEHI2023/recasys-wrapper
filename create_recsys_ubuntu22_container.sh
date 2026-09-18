@@ -28,6 +28,11 @@ for device in /dev/davinci_manager /dev/devmm_svm /dev/hisi_hdc; do
     fi
     device_args+=(--device "$device")
 done
+for device in /dev/uburma /dev/ummu; do
+    if [[ -c $device ]]; then
+        device_args+=(--device "$device")
+    fi
+done
 
 for path in /usr/local/Ascend /usr/local/sbin /usr/local/bin; do
     if [[ ! -d $path ]]; then
@@ -49,11 +54,22 @@ mount_args=(
     -v "/usr/local/sbin:/usr/local/sbin"
     -v "/usr/local/bin:/usr/local/bin"
 )
+for library in /usr/lib64/liburma.so* /usr/lib64/libummu.so* /usr/lib64/libnl*.so*; do
+    if [[ -f $library ]]; then
+        mount_args+=(-v "$library:$library:ro")
+    fi
+done
+if [[ -d /usr/lib64/urma ]]; then
+    mount_args+=(-v "/usr/lib64/urma:/usr/lib64/urma:ro")
+fi
+
+driver_library_path=/usr/local/Ascend/driver/lib64:/usr/local/Ascend/driver/lib64/common:/usr/local/Ascend/driver/lib64/driver:/usr/lib64
 
 docker run -itd --net=host --privileged \
     --name "$container_name" \
     "${device_args[@]}" \
     "${mount_args[@]}" \
+    --env "LD_LIBRARY_PATH=$driver_library_path" \
     --mount "type=bind,source=$repo_root,target=$workspace" \
     --workdir "$workspace" \
     ubuntu:22.04 sleep infinity
