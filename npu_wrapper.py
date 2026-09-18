@@ -180,13 +180,18 @@ def rewrite_cuda(repo: Path, *, require_clean: bool = True) -> Generator[None, N
 
 
 def main(argv: list[str] | None = None) -> None:
-    """Run a script or module with optional patches and CUDA-to-NPU rewrite."""
+    """Run a script directly or through torchrun with optional NPU adaptation."""
 
     args = list(sys.argv[1:] if argv is None else argv)
+    worker_mode = bool(args and args[0] == "--worker")
+    if worker_mode:
+        args.pop(0)
     if not args or args[0] in {"-h", "--help"}:
         print(
             "Usage: python npu_wrapper.py [--patch FILE]... [--rewrite-cuda] "
-            "[-m module | script.py] [args...]",
+            "[-m module | script.py] [args...]\n"
+            "       python npu_wrapper.py [--patch FILE]... [--rewrite-cuda] "
+            "--torchrun [torchrun options] -- [-m module | script.py] [args...]",
             file=sys.stderr,
         )
         if not args:
@@ -195,17 +200,32 @@ def main(argv: list[str] | None = None) -> None:
 
     patch_files = []
     rewrite_cuda_enabled = False
-    while args and args[0] in {"--patch", "--rewrite-cuda"}:
+    torchrun_mode = False
+    while args and args[0] in {"--patch", "--rewrite-cuda", "--torchrun"}:
         if args[0] == "--patch":
             if len(args) < 2:
                 raise SystemExit("npu_wrapper: --patch requires a Git diff file")
             patch_files.append(args[1])
             args = args[2:]
-        else:
+        elif args[0] == "--rewrite-cuda":
             rewrite_cuda_enabled = True
             args = args[1:]
+        else:
+            torchrun_mode = True
+            args = args[1:]
+    if worker_mode and (patch_files or torchrun_mode):
+        raise SystemExit("npu_wrapper: --worker cannot apply patches or launch torchrun")
     if not args:
         raise SystemExit("npu_wrapper: requires a script or -m module")
+
+    launcher_args = []
+    if torchrun_mode:
+        if "--" not in args:
+            raise SystemExit("npu_wrapper: --torchrun requires -- before the target script")
+        separator = args.index("--")
+        launcher_args, args = args[:separator], args[separator + 1:]
+        if not args:
+            raise SystemExit("npu_wrapper: --torchrun requires a target script")
 
     module_mode = args[0] == "-m"
     if module_mode:
@@ -221,11 +241,25 @@ def main(argv: list[str] | None = None) -> None:
     patch_context = temporary_patches(patch_files, repo) if patch_files else nullcontext()
     with patch_context:
         rewrite_context = (
-            rewrite_cuda(repo, require_clean=not patch_files)
-            if rewrite_cuda_enabled
+            temporary_cuda_device_strings(repo, require_clean=not patch_files)
+            if rewrite_cuda_enabled and torchrun_mode
+            else rewrite_cuda(repo, require_clean=not patch_files)
+            if rewrite_cuda_enabled and not worker_mode
             else nullcontext()
         )
         with rewrite_context:
+            if torchrun_mode:
+                command = [
+                    sys.executable, "-m", "torch.distributed.run", *launcher_args,
+                    str(Path(__file__).resolve()), "--worker",
+                ]
+                if rewrite_cuda_enabled:
+                    command.append("--rewrite-cuda")
+                command.extend(["-m", target] if module_mode else [target])
+                command.extend(script_args)
+                raise SystemExit(subprocess.call(command))
+            if worker_mode and rewrite_cuda_enabled:
+                install()
             sys.argv = [target, *script_args]
             if module_mode:
                 runpy.run_module(target, run_name="__main__", alter_sys=True)
